@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
    EXITPROGRAM = False
    
-   barnixie = RpiIN9Nixie( InitCurrent = 3, MaxCurrent = 12)
+   barnixie = RpiIN9Nixie( InitCurrent = 3, MaxCurrent = 13)
    sleep(1)
    if barnixie.SetCurrentPercent(95):
       print("OK")
@@ -304,6 +304,8 @@ if __name__ == "__main__":
                   print("Please input a floating point number")                       
          elif raw_option == "x":
             EXITPROGRAM = True
+            if barnixie.isRampStarted():
+               barnixie.RampStop()
             barnixie.SetCurrentPercent(10)
             barnixie.SupplyOff()
             break
