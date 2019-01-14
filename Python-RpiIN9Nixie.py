@@ -3,7 +3,8 @@
 #Python-RpiIN9Nixie:    
 # a python class that will work with the Rpi-IN9-NIXIE-Bar Graph hat 
 # this file can be run by it self for burn in and testing of Nixies
-# or as a class with use in another program.    
+# or as a class with use in another program.  
+# by default, the class can handle two NIXIE Tubes at one time.  One is called Left and the Other is a Right.  
 
 # the PIGPIO library will connect to hardware PWM 
 # this required that 'sudo pigpiod' damean be started.
@@ -23,16 +24,20 @@ from RepeatedSyncTimer import RepeatedSyncTimer
 
 # pigpio uses the broadcom numbered GPIO
 # BCM GPIO pins to connect to the Sensor 
-# hardware PWM #0
+# hardware PWM #0 for First Nixie bar Graph (Left)
 IO1 = 18
-# hardware PWM #1
-IO2 = 19
+# low frequency PWM for First Nixie Bar Graph (Left) (range is 0-255)
+IO4 = 14
+# hardware PWM #1 for Second Nixie Bar Graph (Right)
+IO2 = 13
+# Low frequency PWM for Second Nixie Bar Graph (Right) (range is 0-255)
+IO5 = 6
 # GPIO output
 IO3 = 15
 
 # frequency set from 1-125000000.   1MHz
 FREQ = 1000000
-# set hardware PWM#2 to 50Hz
+# set hardware PWM#2 to 50Hz (low frequency PWM)
 FREQ2 = 50
 
 # the maximum duty is 100% for RPI is 1M   
@@ -43,44 +48,54 @@ MINDUTY = 0
 LoopRate = 0.01
 
 
-#default parameters set for IN-9
+#default parameters set for IN-9.   If you use IN-13, these DEFAULT parameters should be reduced to 4mA and 5.5mA respectively.   
 # defined in milliamps
 MaxCURRENT = 12
 BurnINCURRENT = 15
 # one percent equates to .33mA with 100 ohm sense resistor with 3.3v PWM output voltage. 
 DUTYCURRENTGAIN = (1.0/1000/3/10000)
 
-
 class RpiIN9Nixie(object):
-  def __init__(self, MaxCurrent = MaxCURRENT, BurnInCurrent = BurnINCURRENT, DutyToCurrentGain = DUTYCURRENTGAIN, InitCurrent = 1.0):
+  def __init__(self, MaxCurrent = MaxCURRENT, BurnInCurrent = BurnINCURRENT, DutyToCurrentGain = DUTYCURRENTGAIN, InitCurrent = 1.0, MaxSupplyCurrent = 18.5):
     # Current is defined in Milliamps.  
     self.MaxCurrent= MaxCurrent/1000.0 
     self.BurnInCurrent = BurnInCurrent/1000.0
     self.DutyGain = DutyToCurrentGain
+    # define the maximum supply current that the power supply can support
+    self.MaxSupplyCurrent = MaxSupplyCurrent/1000.0
     # initiate a gpio instance
     self.pi = pigpio.pi()
     # initate to current to 1ma
     self.InitCurrent = InitCurrent/1000.0
     DutyInit = (self.InitCurrent/self.DutyGain)
-    self.pi.hardware_PWM(IO1, FREQ, DutyInit) # Setting the Hardware PWM
-    # initate PWM2 to 100% duty
-    self.DimmerDuty = 100
-    self.pi.hardware_PWM(IO2, FREQ2, int(self.DimmerDuty/100.00*1000000))
+    # Setting the Hardware PWM (pwm #0 - Left)
+    self.pi.hardware_PWM(IO1, FREQ, DutyInit) 
+    # setting second Hardware pwm (pwm #1 - Right)
+    self.pi.hardware_PWM(IO2, FREQ, DutyInit) 
+    # initate the low frequency PWMs of both channels (Left and Right) to 100% duty
+    self.DimmerDutyLeft = 100
+    self.DimmerDutyRight = 100
+    self.pi.set_PWM_frequency(IO4,FREQ2)    # Left 
+    self.pi.set_PWM_frequency(IO5,FREQ2)    # Right
+    self.pi.set_PWM_dutycycle(IO4, int(self.DimmerDutyLeft/100.00*255)) #Left
+    self.pi.set_PWM_dutycycle(IO5, int(self.DimmerDutyRight/100.00*255)) #right
     # initiate the power supply
     self.pi.write(IO3,0)
     self.Supply = True
+    # burnin true if either channel is being burned in
     self.BurnIn = False
-    self.current = self.InitCurrent
+    self.currentLeft = self.InitCurrent
+    self.currentRight = self.InitCurrent
     self.INDEXPOSITIVE = True
 
     # start timer
-    self.rt = RepeatedSyncTimer(LoopRate,self.RampBarNixie,datetime.datetime.now(), LoopRate)
+    self.rt = RepeatedSyncTimer(LoopRate,self.RampBarNixie)
     self.RampStop()
     self.RAMPSTARTED = False
 
     # setup timer for ramp function
     
-  def RampBarNixie(self,timestr, burntime):
+  def RampBarNixie(self):
     #global pi2
     if self.INDEXPOSITIVE:
        barnixie.IncrementCurrent(0.5)
@@ -101,72 +116,204 @@ class RpiIN9Nixie(object):
     else:
        return False
   
-  def SetCurrent(self,current):
+  def SetCurrent(self, current, Channel = "both"):
     # current is given in mAmp. That is the reason it is divided by 1000
-    self.current = current/1000.0
+    current = current/1000.0
+    # by default, adjust both channels.    (left, right, both)
     # clamp current to range if it is outside range. Return True if inside range, False if outside
-    if self.current <= self.MaxCurrent and self.current >= 0:
-       Duty = int(self.current/self.DutyGain)
-       self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM
+    if current <= self.MaxCurrent and current >= 0:
+       Duty = int(current/self.DutyGain)
+       if Channel == "both":
+          self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM LEFT
+          self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM Right
+          self.currentLeft = current
+          self.currentRight= current
+       elif Channel == "left":
+          self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM LEFT
+          self.currentLeft = current
+       elif Channel == "right":
+          self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM Right
+          self.currentRight = current
+       else:
+          return False
        return True
     else:
-       self.IncrementCurrent(0,False)
-       Duty = int(self.current/self.DutyGain)
-       self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM
+       self.IncrementCurrent(0,False, Channel)
+       if Channel == "both":
+          Duty = int(self.currentLeft/self.DutyGain)
+          self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM LEft
+          self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM right
+       elif Channel == "left":
+          Duty = int(self.currentLeft/self.DutyGain)
+          self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM left
+       else:
+          Duty = int(self.currentRight/self.DutyGain)
+          self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM right
        return False
 
-  def SetCurrentPercent(self,CurrentPercent):
+  def SetCurrentPercent(self,CurrentPercent, Channel = "both"):
      # percent will need to be between 0 and 100 otherwise it will clamp and return false
      if CurrentPercent <= 100 and CurrentPercent >= 0:
-        self.current = self.MaxCurrent*CurrentPercent/100 
-        Duty = int(self.current/self.DutyGain)
-        self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM
+        if Channel == "both":
+           self.currentLeft = self.MaxCurrent*CurrentPercent/100
+           self.currentRight = self.currentLeft 
+           Duty = int(self.currentLeft/self.DutyGain)
+           self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM LEFT
+           self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM Right
+        elif Channel == "left":
+           self.currentLeft = self.MaxCurrent*CurrentPercent/100 
+           Duty = int(self.currentLeft/self.DutyGain)
+           self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM LEFT
+        elif Channel == "right":
+           self.currentRight = self.MaxCurrent*CurrentPercent/100 
+           Duty = int(self.currentRight/self.DutyGain)
+           self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM Right
+        else:
+           return False
         return True
      elif CurrentPercent > 100:
-        self.current = self.MaxCurrent
-        Duty = int(self.current/self.DutyGain)
-        self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM
+        if Channel == "both":
+           self.currentLeft = self.MaxCurrent
+           self.currentRight = self.currentRight
+           Duty = int(self.currentLeft/self.DutyGain)
+           self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM LEFT
+           self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM Right
+        elif Channel == "left":
+           self.currentLeft = self.MaxCurrent
+           Duty = int(self.currentLeft/self.DutyGain)
+           self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM LEFT
+        elif Channel == "right":
+           self.currentRight = self.MaxCurrent
+           Duty = int(self.currentRight/self.DutyGain)
+           self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM Right
+        else:
+           return False
         return False
      else:
-        self.current = 0
-        Duty = int(self.current/self.DutyGain)
-        self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM
+        if Channel == "both":
+           self.currentLeft = 0
+           self.currentRight = 0
+           Duty = int(self.currentLeft/self.DutyGain)
+           self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM LEFT
+           self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM Right
+        elif Channel == "left":
+           self.currentLeft = 0
+           Duty = int(self.currentLeft/self.DutyGain)
+           self.pi.hardware_PWM(IO1, FREQ, Duty) # Setting the Hardware PWM LEFT
+        elif Channel == "right":
+           self.currentRight = 0
+           Duty = int(self.currentRight/self.DutyGain)
+           self.pi.hardware_PWM(IO2, FREQ, Duty) # Setting the Hardware PWM Right
+        else:
+           return False
         return False 
 
-  def IncrementCurrent(self,percent,Loop = True):
+  def IncrementCurrent(self,percent,Loop = True, Channel = "both"):
     # increment the current based on max current.  percent can be both positive or negative
     # default to looping the current if it reaches zero or end
     IncCurrent = percent/100*self.MaxCurrent
-    self.current = self.current + IncCurrent
-    if Loop:
-       if self.current > self.MaxCurrent:
-          self.current = 0
-       elif self.current < 0:
-          self.current = self.MaxCurrent
-       self.SetCurrent(self.current*1000)
+    if Channel == "both":
+       self.currentLeft = self.currentLeft + IncCurrent
+       self.currentRight = self.currentRight + IncCurrent
+       if Loop:
+          if self.currentLeft > self.MaxCurrent:
+             self.currentLeft = 0
+          elif self.currentLeft < 0:
+             self.currentLeft = self.MaxCurrent
+          self.SetCurrent(self.currentLeft*1000, "left")
+          if self.currentRight > self.MaxCurrent:
+             self.currentRight = 0
+          elif self.currentRight < 0:
+             self.currentRight = self.MaxCurrent
+          self.SetCurrent(self.currentRight*1000, "right")
+       else:
+          if self.currentLeft > self.MaxCurrent:
+             self.currentLeft = self.MaxCurrent
+          elif self.currentLeft < 0:
+             self.currentLeft = 0
+          self.SetCurrent(self.currentLeft*1000, "left") 
+          if self.currentRight > self.MaxCurrent:
+             self.currentRight = self.MaxCurrent
+          elif self.currentRight < 0:
+             self.currentRight = 0
+          self.SetCurrent(self.currentRight*1000, "left")       
+    elif Channel == "left":
+       self.currentLeft = self.currentLeft + IncCurrent
+       if Loop:
+          if self.currentLeft > self.MaxCurrent:
+             self.currentLeft = 0
+          elif self.currentLeft < 0:
+             self.currentLeft = self.MaxCurrent
+          self.SetCurrent(self.currentLeft*1000, "left")
+       else:
+          if self.currentLeft > self.MaxCurrent:
+             self.currentLeft = self.MaxCurrent
+          elif self.currentLeft < 0:
+             self.currentLeft = 0
+          self.SetCurrent(self.currentLeft*1000, "left") 
     else:
-       if self.current > self.MaxCurrent:
-          self.current = self.MaxCurrent
-       elif self.current < 0:
-          self.current = 0
-       self.SetCurrent(self.current*1000)       
+       self.currentRight = self.currentRight + IncCurrent
+       if Loop:
+          if self.currentRight > self.MaxCurrent:
+             self.currentRight = 0
+          elif self.currentRight < 0:
+             self.currentRight = self.MaxCurrent
+          self.SetCurrent(self.currentRight*1000, "right")
+       else:
+          if self.currentRight > self.MaxCurrent:
+             self.currentRight = self.MaxCurrent
+          elif self.currentRight < 0:
+             self.currentRight = 0
+          self.SetCurrent(self.currentRight*1000, "left")       
+       
 
-  def SetDimmerDuty(self,DUTY2):
+  def SetDimmerDuty(self,DUTY2, Channel = "both"):
     # DUTY is given as percentage.  1M in Pi will be 100%
-    self.DimmerDuty = DUTY2
-    self.pi.hardware_PWM(IO2, FREQ2, int(self.DimmerDuty/100.00*1000000))
+    if Channel == "both":
+       self.DimmerDutyLeft = DUTY2
+       self.DimmerDutyRight = DUTY2
+       self.pi.set_PWM_dutycycle(IO4, int(self.DimmerDutyLeft/100.00*255)) # Left
+       self.pi.set_PWM_dutycycle(IO5, int(self.DimmerDutyRight/100.00*255)) # Right
+    elif Channel == "left":
+       self.DimmerDutyLeft = DUTY2
+       self.pi.set_PWM_dutycycle(IO4, int(self.DimmerDutyLeft/100.00*255)) # Left
+    else:
+       self.DimmerDutyRight = DUTY2
+       self.pi.set_PWM_dutycycle(IO5, int(self.DimmerDutyRight/100.00*255)) # Right
 
-  def BurnInOn(self):
+
+  def BurnInOn(self, Channel = "both"):
     BurnInDuty = int(self.BurnInCurrent/self.DutyGain)
-    self.SetDimmerDuty(100)
-    self.pi.hardware_PWM(IO1,FREQ, BurnInDuty)
+    if Channel == "both":
+       self.pi.hardware_PWM(IO1,FREQ, BurnInDuty)
+       self.pi.hardware_PWM(IO2,FREQ, BurnInDuty)
+       self.pi.set_PWM_dutycycle(IO4, 255) # Left
+       self.pi.set_PWM_dutycycle(IO5, 255) # Right
+    elif Channel == "left":
+       self.pi.hardware_PWM(IO1,FREQ, BurnInDuty)
+       self.pi.set_PWM_dutycycle(IO4, 255) # Left
+       
+    else:
+       self.pi.hardware_PWM(IO2,FREQ, BurnInDuty)
+       self.pi.set_PWM_dutycycle(IO5, 255) # Right
     self.BurnIn = True
 
-  def BurnInOff(self):
+  def BurnInOff(self, Channel = "both"):
     #return currents and duty back to what they were before the burnin
-    self.SetDimmerDuty(self.DimmerDuty)
-    Duty = int(self.current/self.DutyGain)
-    self.pi.hardware_PWM(IO1,FREQ, Duty)
+    if Channel == "both":
+       self.SetDimmerDuty(self.DimmerDutyLeft, Channel)
+       Duty = int(self.currentLeft/self.DutyGain)  
+       self.pi.hardware_PWM(IO1,FREQ, Duty)
+       Duty = int(self.currentRight/self.DutyGain)    
+       self.pi.hardware_PWM(IO2,FREQ, Duty)
+    elif Channel == "left":
+       self.SetDimmerDuty(self.DimmerDutyLeft, Channel)  
+       Duty = int(self.currentLeft/self.DutyGain)  
+       self.pi.hardware_PWM(IO1,FREQ, Duty)
+    else:
+       self.SetDimmerDuty(self.DimmerDutyRight, Channel)
+       Duty = int(self.currentRight/self.DutyGain)    
+       self.pi.hardware_PWM(IO2,FREQ, Duty)
     self.BurnIn = False
 
   def IsBurnIn(self):
@@ -194,6 +341,8 @@ class RpiIN9Nixie(object):
 
  
 if __name__ == "__main__":
+
+   Channel = "both"
    print "hello world"
 
    EXITPROGRAM = False
@@ -221,8 +370,10 @@ if __name__ == "__main__":
          if barnixie.IsBurnIn():
             print("The Nixie Current is Burning In at %smA which is %s%%" % (float(barnixie.BurnInCurrent*1000), float(barnixie.BurnInCurrent/barnixie.MaxCurrent*100)))
          else:
-            print("The Nixie Current is %sma which is %s%%" % (float(barnixie.current*1000), float(barnixie.current/barnixie.MaxCurrent*100))) 
-         print("The Dimmer Percentage is : %s" % float(barnixie.DimmerDuty))
+            print("The Left Nixie Current is %sma which is %s%%" % (float(barnixie.currentLeft*1000), float(barnixie.currentLeft/barnixie.MaxCurrent*100))) 
+            print("The Right Nixie Current is %sma which is %s%%" % (float(barnixie.currentRight*1000), float(barnixie.currentRight/barnixie.MaxCurrent*100))) 
+         print("The Left Dimmer Percentage is : %s" % float(barnixie.DimmerDutyLeft))
+         print("The Right Dimmer Percentage is : %s" % float(barnixie.DimmerDutyRight))
          if barnixie.INDEXPOSITIVE:
             print("The index is set to POSITIVE")
          else:
@@ -231,10 +382,17 @@ if __name__ == "__main__":
             print("The supply is ON")
          else:
             print("The supply if OFF")
+         if Channel == "both":
+            print("Commands will set Both Channels")
+         elif Channel == "left":
+            print("Commands will set LEFT Channel")
+         else:
+            print("Commands will set RIGHT Channel")
          print("Press: ")
          print("return: to increase duty +/- 1/2 percent")
          print("[t]: toggle the index polarity")
          print("[d]: Set the Dimmer")
+         print("[c]: change the Channel either Both, Left, or Right")
          print("[r]: Ramp the solution up or down")
          print("[l]: loop rate in seconds")
          print("[s]: Toggle the power supply")
@@ -246,9 +404,9 @@ if __name__ == "__main__":
          # increment 
          if len(raw_option) == 0:
             if barnixie.INDEXPOSITIVE:
-               barnixie.IncrementCurrent(0.5)
+               barnixie.IncrementCurrent(0.5, Channel)
             else:
-               barnixie.IncrementCurrent(-0.5)
+               barnixie.IncrementCurrent(-0.5, Channel)
             break
          elif raw_option == "t":
             if barnixie.INDEXPOSITIVE:
@@ -263,11 +421,25 @@ if __name__ == "__main__":
                   if (raw_option2 > 100) or (raw_option2 < 0):
                      print("Please try again: need to input a number between 0-100")   
                   else:
-                     barnixie.SetDimmerDuty(raw_option2)
+                     barnixie.SetDimmerDuty(raw_option2, Channel)
                      break
                else:
                      print("Please input a digit for Dimmer Percentage")  
             break
+         elif raw_option == "c":
+            while True:
+               raw_option2 = raw_input("Which Channel (b=both, l=Left, r=right): ")
+               if raw_option2== "b":
+                  Channel = "both"
+                  break
+               elif raw_option2 == "l":
+                  Channel = "left"
+                  break
+               elif raw_option2 == "r":
+                  Channel = "right"
+                  break
+               else:
+                  print("Please select either [b] for both, [l] for Left, [r] for right")  
          elif raw_option == "s":
             if barnixie.IsSupplyOn():
                barnixie.SupplyOff()
@@ -275,15 +447,15 @@ if __name__ == "__main__":
                barnixie.SupplyOn()
          elif raw_option == "b":
             if barnixie.IsBurnIn():
-               barnixie.BurnInOff()
+               barnixie.BurnInOff(Channel)
             else:
-               barnixie.BurnInOn()  
+               barnixie.BurnInOn(Channel)  
          elif raw_option.isdigit():
             raw_option = int(raw_option)
             if (raw_option > 100) or (raw_option < 0):
                print("Please try again: need to input a number between 0-100")   
             else:
-               barnixie.SetCurrentPercent(raw_option)
+               barnixie.SetCurrentPercent(raw_option, Channel)
                break   
          elif raw_option == "r":
             if barnixie.isRampStarted():
@@ -306,7 +478,7 @@ if __name__ == "__main__":
             EXITPROGRAM = True
             if barnixie.isRampStarted():
                barnixie.RampStop()
-            barnixie.SetCurrentPercent(10)
+            barnixie.SetCurrentPercent(10, Channel)
             barnixie.SupplyOff()
             break
          else:
