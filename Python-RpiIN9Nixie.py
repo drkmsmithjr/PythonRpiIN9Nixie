@@ -47,16 +47,11 @@ MINDUTY = 0
 # Default loop rate
 LoopRate = 0.01
 
-
-#default parameters set for IN-9.   If you use IN-13, these DEFAULT parameters should be reduced to 4mA and 5.5mA respectively.   
-# defined in milliamps
-MaxCURRENT = 12
-BurnINCURRENT = 15
 # one percent equates to .33mA with 100 ohm sense resistor with 3.3v PWM output voltage. 
 DUTYCURRENTGAIN = (1.0/1000/3/10000)
 
 class RpiIN9Nixie(object):
-  def __init__(self, MaxCurrent = MaxCURRENT, BurnInCurrent = BurnINCURRENT, DutyToCurrentGain = DUTYCURRENTGAIN, InitCurrent = 1.0, MaxSupplyCurrent = 18.5):
+  def __init__(self, MaxCurrent = 3, BurnInCurrent = 3, DutyToCurrentGain = DUTYCURRENTGAIN, InitCurrent = 1.0, MaxSupplyCurrent = 18.5):
     # Current is defined in Milliamps.  
     self.MaxCurrent= MaxCurrent/1000.0 
     self.BurnInCurrent = BurnInCurrent/1000.0
@@ -342,29 +337,34 @@ class RpiIN9Nixie(object):
  
 if __name__ == "__main__":
 
-   Channel = "both"
-   print "hello world"
 
+   #print "hello world"
+
+   if len(sys.argv) < 2:
+      print("No Nixie Tube Defined.  It is either IN-9 or IN-13")
+      print("for example: python Python-RpiIN9Nixie.py IN-13")
+      exit()
+   elif len(sys.argv) == 2:
+      NixieType = sys.argv[1]
+      if NixieType != "IN-9" and NixieType != "IN-13" :
+         print("Incorrect Nixie Tube Defined.  It is either IN-9 or IN-13")
+         exit()
+   elif len(sys.argv) >= 3:
+      print("There was an incorrect number of arguments for program:  two maximum")
+      exit()
+   # set the maximum currents:  13ma for IN-9 and 5ma for IN-13
+   if NixieType == "IN-9":
+      MaxCURRENT = 12
+      BurnINCURRENT = 14
+   else:
+      MaxCURRENT = 4
+      BurnINCURRENT = 5
+
+   Channel = "both"
    EXITPROGRAM = False
    
-   barnixie = RpiIN9Nixie( InitCurrent = 3, MaxCurrent = 13)
-   sleep(1)
-   if barnixie.SetCurrentPercent(95):
-      print("OK")
-   else:
-      print("Needed to clamp current")
-   sleep(.1)
-   barnixie.SetCurrentPercent(10)
-   sleep(.1)
-   barnixie.SetDimmerDuty(30)
-   sleep(.1)
-   barnixie.SetDimmerDuty(100)
-   sleep(.1)
-   barnixie.BurnInOn()
-   sleep(.2)
-   barnixie.BurnInOff()
-   sleep(.2)
-   #barnixie.SupplyOff()
+   barnixie = RpiIN9Nixie( InitCurrent = 1, MaxCurrent = MaxCURRENT, BurnInCurrent = BurnINCURRENT)
+   
    while EXITPROGRAM == False:
       while True:         
          if barnixie.IsBurnIn():
