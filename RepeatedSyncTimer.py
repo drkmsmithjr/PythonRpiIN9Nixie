@@ -38,6 +38,10 @@ class RepeatedSyncTimer(object):
       self.is_running = True
 
   def stop(self):
-    self._timer.cancel()
-    self.is_running = False
-
+    #check to see that the timer is running.   
+    if self.is_running:
+       self._timer.cancel()
+       self.is_running = False
+       return True
+    else:
+       return False

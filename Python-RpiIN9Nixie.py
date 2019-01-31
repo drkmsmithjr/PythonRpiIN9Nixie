@@ -102,7 +102,12 @@ class RpiIN9Nixie(object):
     self.RAMPSTARTED = True
 
   def RampStop(self):
-    self.rt.stop()
+    # We may need to test the thread several times to stop the time
+    for x in range (0,200):
+       if self.rt.stop():
+          break
+       else:
+          print("Failed to stop")
     self.RAMPSTARTED = False
 
   def isRampStarted(self):
@@ -357,8 +362,8 @@ if __name__ == "__main__":
       MaxCURRENT = 12
       BurnINCURRENT = 14
    else:
-      MaxCURRENT = 4
-      BurnINCURRENT = 5
+      MaxCURRENT = 4.6
+      BurnINCURRENT = 5.2
 
    Channel = "both"
    EXITPROGRAM = False
