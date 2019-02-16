@@ -66,7 +66,9 @@ class RpiIN9Nixie(object):
     # Setting the Hardware PWM (pwm #0 - Left)
     self.pi.hardware_PWM(IO1, FREQ, DutyInit) 
     # setting second Hardware pwm (pwm #1 - Right)
-    self.pi.hardware_PWM(IO2, FREQ, DutyInit) 
+    self.pi.hardware_PWM(IO2, FREQ, DutyInit)
+    # how much the right channel is compared to the left in percent
+    #self.LefttoRightOffset = -8 
     # initate the low frequency PWMs of both channels (Left and Right) to 100% duty
     self.DimmerDutyLeft = 100
     self.DimmerDutyRight = 100
@@ -335,9 +337,6 @@ class RpiIN9Nixie(object):
        return True
     else:
        return False
-
-
-
 
  
 if __name__ == "__main__":
