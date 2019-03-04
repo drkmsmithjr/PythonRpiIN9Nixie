@@ -47,8 +47,13 @@ MINDUTY = 0
 # Default loop rate
 LoopRate = 0.01
 
-# one percent equates to .33mA with 100 ohm sense resistor with 3.3v PWM output voltage. 
-DUTYCURRENTGAIN = (1.0/1000/3/10000)
+# one percent equates to .33mA with 100 ohm sense resistor with 3.3v PWM output voltage.
+# one percent equates to 
+# hardware PWM with PIGIO specifies duty at 1-1e6.   1% is 10000
+# load resistor Rs is 133 ohms.
+# power supply is 3.3v.
+# Gain is 3.3v/Rs /(Scalling fActor).   The Scalling factor for hardware PWM using PIGPIO is 1000000
+DUTYCURRENTGAIN = (3.3/133/1000000)
 
 class RpiIN9Nixie(object):
   def __init__(self, MaxCurrent = 3, BurnInCurrent = 3, DutyToCurrentGain = DUTYCURRENTGAIN, InitCurrent = 1.0, MaxSupplyCurrent = 18.5):
