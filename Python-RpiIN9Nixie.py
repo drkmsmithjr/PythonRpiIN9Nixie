@@ -45,7 +45,7 @@ MAXDUTY = 1000000
 MINDUTY = 0
 
 # Default loop rate
-LoopRate = 0.01
+LoopRate = 0.02
 
 # one percent equates to .33mA with 100 ohm sense resistor with 3.3v PWM output voltage.
 # one percent equates to 
@@ -100,9 +100,9 @@ class RpiIN9Nixie(object):
   def RampBarNixie(self):
     #global pi2
     if self.INDEXPOSITIVE:
-       barnixie.IncrementCurrent(0.5)
+       barnixie.IncrementCurrent(2.0)
     else:
-       barnixie.IncrementCurrent(-0.5)
+       barnixie.IncrementCurrent(-2.0)
 
   def RampStart(self):
     self.rt.start()
