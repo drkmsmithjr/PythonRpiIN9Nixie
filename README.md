@@ -8,9 +8,9 @@ This library can be installed on the raspberry pi by the usual git clone techniq
 
 The complete HAT hardware and software design can also be downloaded at the [RpiNixieBarGraphHat](https://github.com/drkmsmithjr/RpiNixieBarGraphHat) repository.   This repository is a sub-module to the [RpiNixieBarGraphHat](https://github.com/drkmsmithjr/RpiNixieBarGraphHat) repository.      
 
-This Library uses the [pigrio](http://abyz.me.uk/rpi/pigpio/) library because of its ability to control the harware PWM outputs of the raspbarry pi zero.
+This Library uses the [pigpio](http://abyz.me.uk/rpi/pigpio/) library because of its ability to control the harware PWM outputs of the raspbarry pi zero.
 
-* To install this [pigrio](http://abyz.me.uk/rpi/pigpio/) library perform the following 
+* To install this [pigpio](http://abyz.me.uk/rpi/pigpio/) library perform the following 
 
 * sudo apt-get update
 
